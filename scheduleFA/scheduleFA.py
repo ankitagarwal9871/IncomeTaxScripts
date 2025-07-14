@@ -2,6 +2,8 @@
 from urllib.request import Request, urlopen
 from pyquery import PyQuery
 import datetime
+import json
+import requests
 import sys
 from time import strftime, localtime
 from collections import OrderedDict
@@ -33,36 +35,22 @@ def export_data(output_list):
     print(output_line)
 
 def fetch_stock_price(calendar_year):
-  start_date = datetime.datetime(calendar_year-1,12,15,0,0).timestamp()
-  end_date = datetime.datetime(calendar_year+1,1,15,0,0).timestamp()
-  stock_prices_url = "https://finance.yahoo.com/quote/ADBE/history?period1=" + str(start_date)
-  stock_prices_url = stock_prices_url + "&period2=" + str(end_date) + "&interval=1d&filter=history&frequency=1d"
+  start_date = datetime.datetime(calendar_year-1,12,15,0,0).strftime("%Y-%m-%d")
+  end_date = datetime.datetime(calendar_year+1,1,15,0,0).strftime("%Y-%m-%d")
+  stock_prices_url = 'https://api.twelvedata.com/time_series?apikey=f59ddcc6c818426fa713264d877e16ef&interval=1day&symbol=ADBE&start_date='
+  stock_prices_url = stock_prices_url + start_date + ' 21:16:00&end_date=' + end_date + ' 21:16:00'
   print("Fetching stock prices from " + stock_prices_url)
-  req = Request(stock_prices_url, headers={'User-Agent': 'Mozilla/5.0'})    
-  html = urlopen(req).read()
-  pq = PyQuery(html)
-  tag = pq('tr')
-  volume_found = 0
-  col_no = 0
+  response = requests.get(stock_prices_url)
+  response_json = json.loads(response.text)
+  if response_json["status"] != "ok":
+    sys.exit("Error fetching stock prices from  " + stock_prices_url)
   stock_prices_dict = OrderedDict()
-  for line in tag.text().split('\n'):
-    if "Volume" in line:
-      volume_found = 1
-    if volume_found:
-      if col_no == 0:
-        raw_data = line.split(" ")
-        if len(raw_data) < 4:
-          break
-        formatted_date = raw_data[3] + '-' + raw_data[1] + '-' + raw_data[2]
-        date = datetime.datetime.strptime(formatted_date[:-1], '%Y-%b-%d').timestamp()
-      if col_no == 4:
-        closing_price = line
-        stock_prices_dict[date] = closing_price
-      if col_no == 5:
-        col_no = -1
-      col_no = col_no + 1
-  return stock_prices_dict
-    
+  for line in response_json["values"]:
+    date = datetime.datetime.strptime(line["datetime"], '%Y-%m-%d').timestamp()
+    stock_prices_dict[date] = line["close"]
+
+  return stock_prices_dict 
+   
 
 def find_closing_date(stock_prices_dict):
   # return last stock price in 12th month(December)
