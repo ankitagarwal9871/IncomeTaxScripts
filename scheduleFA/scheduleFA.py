@@ -29,8 +29,10 @@ def validate_input(input_list, calendar_year):
       sys.exit("Acquire date is more than calendar year. Please fix.") 
 
 
-def export_data(output_list):
-  print("AcquireDate <space> NoOfShares <space> InitialCost(Total) <space> TotalPeakValue(Date) <space> TotalCloseValue(Date)")
+def export_data(output_list_unsorted):
+  output_list = sorted(output_list_unsorted, key=lambda x: datetime.datetime.strptime(x.split(" ")[0], '%d%m%Y').strftime("%Y%m%d"))   
+ 
+  print("AcquireDate <space> NoOfShares <space> TotalCost <space> TotalPeakValue <space> TotalCloseValue")
   for output_line in output_list:
     print(output_line)
 
@@ -135,12 +137,12 @@ for input_line in input_list:
   closing_date_raw = find_closing_date(stock_prices_dict)
 
   input_values = input_line.split(' ')
-  output_line = input_values[0] + "   " + input_values[1] + "   " + input_values[2] + "("
-  output_line = output_line + str(float(input_values[1]) * float(input_values[2])) + ")   "
-  output_line = output_line + str(float(stock_prices_dict[peak_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(peak_date_raw, sbi_rates))) + "("
-  output_line = output_line + str(strftime('%Y/%m/%d', localtime(peak_date_raw))) + ")   "
-  output_line = output_line + str(float(stock_prices_dict[closing_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(closing_date_raw, sbi_rates))) + "("
-  output_line = output_line + str(strftime('%Y/%m/%d', localtime(closing_date_raw))) + ")"
+  output_line = input_values[0] + "   " + input_values[1] + "   "
+  output_line = output_line + str(round(float(input_values[1]) * float(input_values[2]))) + "   "
+  output_line = output_line + str(round(float(stock_prices_dict[peak_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(peak_date_raw, sbi_rates))))
+  #output_line = output_line + "(" + str(strftime('%Y/%m/%d', localtime(peak_date_raw))) + ")"
+  output_line = output_line + "   " + str(round(float(stock_prices_dict[closing_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(closing_date_raw, sbi_rates))))
+  #output_line = output_line + "(" + str(strftime('%Y/%m/%d', localtime(closing_date_raw))) + ")"
   output_list.append(output_line)
 
 export_data(output_list)
