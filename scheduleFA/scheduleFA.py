@@ -10,8 +10,9 @@ from collections import OrderedDict
 
 def import_initial_data(input_list):
   print("Enter the initial csv data in following format, one line for each vesting:")
-  print("Acquire date in ddmmyyyy <space> No of shares <space> Acquire cost per share in INR")
-  print("Eg: 30062020 8 35884.88")
+  print("Acquire date in ddmmyyyy <space> No of shares <space> Acquire cost per share in INR <space> Sell date in ddmmyyyy(if applicable) <space> Total Sale proceeds in INR(in integer)")
+  print("Eg1: 30062020 8 35884.88")
+  print("Eg2: 30062020 8 35884.88 30082020 4000")
   print("When done just enter a blank line")
 
   while True:
@@ -26,13 +27,23 @@ def import_initial_data(input_list):
 def validate_input(input_list, calendar_year):
   for input_line in input_list:
     if int(input_line[4:8]) > int(calendar_year):
-      sys.exit("Acquire date is more than calendar year. Please fix.") 
+      sys.exit("Acquire date is more than calendar year for <" + input_line + ">. Please fix.") 
+
+    if len(input_line.split(" ")) > 3:
+      sell_date = input_line.split(" ")[3]
+      if int(sell_date[4:8]) != int(calendar_year):
+        sys.exit("Sell year is not calendar year for <" + input_line + ">. Please fix.") 
+
+      formatted_sell_date = datetime.datetime.strptime(sell_date, '%d%m%Y').strftime("%Y%m%d")
+      formatted_acquire_date = datetime.datetime.strptime(input_line.split(" ")[0], '%d%m%Y').strftime("%Y%m%d")
+      if formatted_sell_date < formatted_acquire_date:
+        sys.exit("Sell date is earlier than acquire date for <" + input_line + ">. Please fix.") 
 
 
 def export_data(output_list_unsorted):
   output_list = sorted(output_list_unsorted, key=lambda x: datetime.datetime.strptime(x.split(" ")[0], '%d%m%Y').strftime("%Y%m%d"))   
  
-  print("AcquireDate <space> NoOfShares <space> TotalCost <space> TotalPeakValue <space> TotalCloseValue")
+  print("AcquireDate <space> NoOfShares <space> TotalCost <space> TotalPeakValue <space> TotalCloseValue <space> HoldingCost <space> TotalSaleProceeds")
   for output_line in output_list:
     print(output_line)
 
@@ -62,11 +73,16 @@ def find_closing_date(stock_prices_dict):
       return date
 
 
-def find_peak_date(stock_prices_dict, calendar_year, start_date_in_ddmmyyyy):
+def find_peak_date(stock_prices_dict, calendar_year, start_date_in_ddmmyyyy, end_date_in_ddmmyyyy):
   start_date = datetime.datetime.strptime(start_date_in_ddmmyyyy, '%d%m%Y').timestamp()
+  end_date = 0
+  if len(end_date_in_ddmmyyyy) > 1:
+    end_date = datetime.datetime.strptime(end_date_in_ddmmyyyy, '%d%m%Y').timestamp()
   peak_value = -1
   peak_date = -1
   for date,price in stock_prices_dict.items():
+    if peak_date == -1 and end_date != 0 and end_date <= date:
+      continue
     if peak_date == -1 and strftime('%Y', localtime(date)) == calendar_year:
       peak_value = price
       peak_date = date
@@ -133,16 +149,25 @@ sbi_rates = fetch_sbi_rates(calendar_year)
 
 output_list = []
 for input_line in input_list:
-  peak_date_raw = find_peak_date(stock_prices_dict, calendar_year, input_line[0:8])
+  input_values = input_line.split(' ')
+  sell_date = "0"
+  if len(input_values) > 4:
+    sell_date = input_values[3]
+  peak_date_raw = find_peak_date(stock_prices_dict, calendar_year, input_line[0:8], sell_date)
   closing_date_raw = find_closing_date(stock_prices_dict)
 
-  input_values = input_line.split(' ')
   output_line = input_values[0] + "   " + input_values[1] + "   "
   output_line = output_line + str(round(float(input_values[1]) * float(input_values[2]))) + "   "
-  output_line = output_line + str(round(float(stock_prices_dict[peak_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(peak_date_raw, sbi_rates))))
+  peak_value = round(float(stock_prices_dict[peak_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(peak_date_raw, sbi_rates)))
+  if len(input_values) > 4 and peak_value < int(input_values[4]):
+    peak_value = int(input_values[4])
+  output_line = output_line + str(peak_value)
   #output_line = output_line + "(" + str(strftime('%Y/%m/%d', localtime(peak_date_raw))) + ")"
-  output_line = output_line + "   " + str(round(float(stock_prices_dict[closing_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(closing_date_raw, sbi_rates))))
-  #output_line = output_line + "(" + str(strftime('%Y/%m/%d', localtime(closing_date_raw))) + ")"
+  if len(input_values) == 3:
+    output_line = output_line + "   " + str(round(float(stock_prices_dict[closing_date_raw]) * float(input_values[1]) * float(get_sbi_rate_for_date(closing_date_raw, sbi_rates))))
+    #output_line = output_line + "(" + str(strftime('%Y/%m/%d', localtime(closing_date_raw))) + ")"
+  if len(input_values) > 4:
+    output_line = output_line + "   0   0   " + str(round(float(input_values[4])))
   output_list.append(output_line)
 
 export_data(output_list)
